@@ -1,0 +1,5 @@
+# IntelliJ Idea Files
+.idea
+
+# Mac Specific Temporary Files
+.DS_Store
