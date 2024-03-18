@@ -91,7 +91,7 @@ NOTE: Ensure you are not providing excessive positive voltage on the input pins.
 
 The following outputs are required (Based on Arduino Nano Hardware):
 * Pin D2 - Output for Lane 1 LED
-* Pin D2 - Output for Lane 2 LED
+* Pin D3 - Output for Lane 2 LED
 * Serial over USB for race tracking and debug output
   * Configured Rate:  115200 bps
   * 8N1 - 8 data bits, no parity, 1 stop bit, no flow control
@@ -100,7 +100,7 @@ Output LED Pins Limits:
 * Voltage: 5v
 * Current limit
   * Continuous: 20ma
-  * Peak: 20ma
+  * Peak: 40ma
 
 NOTE: Make sure to size your current limiting resistor appropriately to avoid drawing too much current from the pins.
 Exceeding these values may damage the pins or microcontroller.
