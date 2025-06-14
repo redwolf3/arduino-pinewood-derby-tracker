@@ -2,7 +2,7 @@
 #define constants
 
 /* Serial Port Baud Rate */
-unsigned long BAUD_RATE = 9600;
+const unsigned long BAUD_RATE = 9600;
 
 char* MOCK_SERIAL_NUMBER = "5432A";
 
