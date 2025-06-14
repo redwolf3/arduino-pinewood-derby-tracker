@@ -4,7 +4,7 @@
 /* Serial Port Baud Rate */
 const unsigned long BAUD_RATE = 9600;
 
-char* MOCK_SERIAL_NUMBER = "5432A";
+const char* MOCK_SERIAL_NUMBER = "5432A";
 
 /* Status Pin to show Arduino State */
 const int16_t STATUS_LED_PIN = LED_BUILTIN;
