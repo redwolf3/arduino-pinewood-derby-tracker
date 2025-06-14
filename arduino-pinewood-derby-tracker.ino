@@ -125,7 +125,7 @@ void processInputCommand() {
     commandProcessed = true;
 
   } else if (cmd.equals("MA") || cmd.equals("MB") || cmd.equals("MC") || cmd.equals("MD") || cmd.equals("ME") || cmd.equals("MG")) {
-    // TOOD: Implemente
+    // TODO: Implement
     commandProcessed = true;
 
 } else if (cmd.equals("MB")) {
