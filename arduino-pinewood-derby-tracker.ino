@@ -14,6 +14,7 @@ int readyStateBlinkCount = 0;
 
 unsigned long raceCount = 0;
 unsigned long raceStartTime = 0;
+unsigned long totalRaceTime = 0;
 unsigned long elapsedL1Time = 0;
 unsigned long elapsedL2Time = 0;
 int winner = 0;
@@ -33,9 +34,11 @@ unsigned long finishSwitchL1NextReport = 0;
 unsigned long finishSwitchL2NextReport = 0;
 unsigned long uptimeNextReport = 0;
 
+unsigned long maxRaceTime = 10000;
+
 bool readyStateReported = false;
-bool startModeReported = false;
-bool raceResultsHeaderReported = false;
+
+int serialInputs[2] = {-1, -1};
 
 void setup() {
   // Initialize Outputs
@@ -52,82 +55,16 @@ void setup() {
 
 
   // Initialize serial and wait for port to open:
-  Serial.begin(115200);
+  Serial.begin(BAUD_RATE);
   while (!Serial) {
     ;  // wait for serial port to connect. Needed for native USB port only
   }
-
-  // Wait 3 seconds before displaying data to give client time to start console
-  Serial.println("Startup in 3...");
-  delay(1000);
-  Serial.println("2...");
-  delay(1000);
-  Serial.println("1...");
-  delay(1000);
-  Serial.println();
-
-  // Print Title Information
-  printTitle();
-
-  // Wait for Test Mode
-  setupWaitForTestMode();
-
-  // Output if we are entering test mode
-  if (mode != MODE_TEST) {
-    mode = MODE_RUN;
-  } else {
-    Serial.println("Entering test mode...");
-  }
 }
-
-
-void setupWaitForTestMode() {
-  // Wait for test mode
-  Serial.println("Hold Reset button for 2 seconds to enter test mode...");
-  Serial.println("Waiting 10 seconds to enter test mode...");
-
-  bool lastResetButtonPressed = false;
-  int resetCount = 0;
-  for (int i = 10; i > 0 && mode != MODE_TEST; i--) {
-    switch (i % 3) {
-      case 0:
-        ledL1State = true;
-        ledL2State = false;
-        break;
-
-      case 1: 
-        ledL1State = true;
-        ledL2State = true;
-        break;
-
-      case 2:
-        ledL1State = false;
-        ledL2State = true;
-        break;
-    }
-
-    Serial.println(String(i) + "...");
-    delay(1000);
-
-    if (isResetButtonPressed()) {
-      resetCount++;
-    } else {
-      resetCount = 0;
-    }
-
-    if (resetCount >= 2) {
-      mode = MODE_TEST;
-
-      // Configure uptime to report at the next even report interval
-      uptimeNextReport = ((millis() / TEST_MODE_UPTIME_REPORT_INTERVAL) + 1) * TEST_MODE_UPTIME_REPORT_INTERVAL;
-    }
-
-    updateOutputs();
-  }
-}
-
 
 void loop() {
+  readSerialInput();
+  processInputCommand();
+
   if (mode != MODE_TEST) {
     processRunMode();
   } else {
@@ -137,6 +74,75 @@ void loop() {
   updateOutputs();
 }
 
+void readSerialInput() {
+  if (Serial.available() > 0) {
+    serialInputs[0] = serialInputs[1];
+    serialInputs[1] = Serial.read();
+  }
+}
+
+void processInputCommand() {
+  bool commandProcessed = false;
+  String cmd = String("");
+  if (serialInputs[0] >= 0 && serialInputs[1] >= 0) {
+    cmd.concat((char)serialInputs[0]);
+    cmd.concat((char)serialInputs[1]);
+  }
+
+  // Return Version of Firmware and Serial Number
+  if (cmd.equals("RV")) {
+    printVersionAndSerialNumber();
+    commandProcessed = true;
+
+  // Return Serial Number
+  } else if (cmd.equals("RS")) {
+    printSerialNumber();
+    commandProcessed = true;
+
+  // Return Features - All Features Disabled
+  } else if (cmd.equals("RF")) {
+    // Serial.println("0000 0011");
+    Serial.println("0000 0011");
+    commandProcessed = true;
+
+  // Read Mode - Shows the current modes set for the timer
+  } else if (cmd.equals("RM")) {
+    Serial.println("0 000000 0 0 0");
+    commandProcessed = true;
+
+  // Returns start switch condition 
+  } else if (cmd.equals("RG")) {
+    if (isStartButtonPressed()) {
+      Serial.println("1");
+    } else {
+      Serial.println("0");
+    }
+    commandProcessed = true;
+
+  // Reset Lane - Force results
+  } else if (cmd.equals("RL")) {
+    // TOOD: Implement
+    commandProcessed = true;
+
+  } else if (cmd.equals("MA") || cmd.equals("MB") || cmd.equals("MC") || cmd.equals("MD") || cmd.equals("ME") || cmd.equals("MG")) {
+    // TODO: Implement
+    commandProcessed = true;
+
+} else if (cmd.equals("MB")) {
+    commandProcessed = true;
+    
+  } else if (cmd.equals("N0")) {
+    commandProcessed = true;
+
+  }
+
+  if (commandProcessed) {
+    serialInputs[0] = -1;
+    serialInputs[1] = -1;
+
+    //Serial.println("Received: " + cmd);
+  }
+}
 
 void processRunMode() {
   switch (state) {
@@ -164,45 +170,17 @@ void processRunMode() {
 void processStartupState() {
   unsigned long currentMillis = millis();
 
-  if (!startModeReported) {
-    // Alterate the LED stats to start the blinking
-    ledL1State = true;
-    ledL2State = false;
-    startupStateNextBlink = currentMillis + READY_STATE_TRANSITION_BLINK_INTERVAL;
-
-    Serial.println();
-    Serial.println("Racers, start your engines!");
-    Serial.println("Press Reset button to prepare for first race...");
-    Serial.println("");
-    startModeReported = true;
-  }
-
-  // Alternate L1 and L2 lights on initial startup
-  if (currentMillis >= startupStateNextBlink) {
-    ledL1State = !ledL1State;
-    ledL2State = !ledL2State;
-    startupStateNextBlink = currentMillis + READY_STATE_TRANSITION_BLINK_INTERVAL;
-  }
-
-  if (isResetButtonPressed()) {
-    state = STATE_READY;
-    ledL1State = true;
-    ledL2State = true;
-    readyStateBlinkCount = 0;
-    resetButtonNextReport = currentMillis + RUN_MODE_RESET_NEW_LINE_INTERVAL;
-    readyStateNextBlink = currentMillis + READY_STATE_TRANSITION_BLINK_INTERVAL;
-  }
+  state = STATE_READY;
+  ledL1State = true;
+  ledL2State = true;
+  readyStateBlinkCount = 0;
+  resetButtonNextReport = currentMillis + RUN_MODE_RESET_NEW_LINE_INTERVAL;
+  readyStateNextBlink = currentMillis + READY_STATE_TRANSITION_BLINK_INTERVAL;
 }
 
 
 void processReadyState() {
   unsigned long currentMillis = millis();
-
-  if (!raceResultsHeaderReported) {
-    Serial.println("");
-    Serial.println("Race #, L1 Time, L2 Time, Winning Lane");
-    raceResultsHeaderReported = true;
-  }
 
   if (!readyStateReported && currentMillis > readyStateNextBlink) {
     ledL1State = !ledL1State;
@@ -243,6 +221,7 @@ void processReadyState() {
 
 void processRacingState() {
   unsigned long currentMillis = millis();
+  unsigned long elapsedRaceTime = currentMillis - raceStartTime;
 
   if (winner == 0 && currentMillis > racingStateNextBlink) {
     ledL1State = !ledL1State;
@@ -253,12 +232,12 @@ void processRacingState() {
 
   // Check if lane 1 just finished
   if (elapsedL1Time == 0 && isFinishSwitchL1Pressed()) {
-    elapsedL1Time = currentMillis - raceStartTime;
+    elapsedL1Time = elapsedRaceTime;
   }
 
   // Check if lane 2 just finished
   if (elapsedL2Time == 0 && isFinishSwitchL2Pressed()) {
-    elapsedL2Time = currentMillis - raceStartTime;
+    elapsedL2Time = elapsedRaceTime;
   }
 
   // Check for  winner on every pass
@@ -291,8 +270,9 @@ void processRacingState() {
     ledL2State = true;
   }
 
-  if ((elapsedL1Time != 0 && elapsedL2Time != 0 && winner != 0) || isResetButtonPressed()) {
-    reportWinner();
+  if ((elapsedL1Time != 0 && elapsedL2Time != 0 && winner != 0) || elapsedRaceTime >= maxRaceTime || isResetButtonPressed()) {
+    totalRaceTime = elapsedRaceTime;
+    reportResults();
 
     // If no winner was defined, alternate the blinking order to show "no completion"
     if (winner == 0) {
@@ -389,21 +369,6 @@ void processTestMode() {
 }
 
 
-void reportWinner() {
-  Serial.print(String(raceCount));
-  Serial.print(", ");
-  Serial.print(elapsedTimeSecs(elapsedL1Time));
-  Serial.print(", ");
-  Serial.print(elapsedTimeSecs(elapsedL2Time));
-  Serial.print(", ");
-  if (winner != 0) {
-    Serial.print(String(winner));
-  } else {
-    Serial.print("N/A");
-  }
-  Serial.println();
-}
-
 
 void updateOutput(int pin, bool ledHigh) {
   if (ledHigh) {
@@ -438,4 +403,104 @@ bool isResetButtonPressed() {
 
 int isStartButtonPressed() {
   return digitalRead(START_BUTTON) == LOW;
+}
+
+void printVersionAndSerialNumber() {
+  Serial.println("MICRO WIZARD - Emulator - 2025");
+  Serial.print("K1 Version 1.10E Serial Number <");
+  Serial.print(MOCK_SERIAL_NUMBER);
+  Serial.println(">");
+}
+
+void printSerialNumber() {
+  Serial.println(MOCK_SERIAL_NUMBER);
+}
+
+void reportFlags() {
+  // This command will return 8 binary bits like 0011 0111.
+  // A 1 means the option is enabled:
+  // "1111 1111" all feature bits set
+  // "0000 0000" all feature bits clear 
+
+  //   8th bit Sequence of Finish K3 only
+  Serial.print(0);
+  //   7th bit Countdown Clock
+  Serial.print(0);
+  //   6th bit Laser Reset from computer
+  Serial.print(0);
+  //   5th bit Force End the race and send results
+  Serial.print(0);
+  //   4th bit Eliminator mode
+  Serial.print(0);
+  //   3rd bit Reverse Lanes
+  Serial.print(0);
+  //   2nd bit Mask Lanes
+  Serial.print(0);
+  //   1st bit Serial race data option
+  Serial.println(1);
+}
+
+void reportMode() {
+  // Shows the current modes set for the timer:
+  // ex 1: "0 000000 0 0 0"
+  // ex 1: "6 000011 0 0 1"
+
+  // Number of lanes used in reverse order mode - 6
+  Serial.print(0);
+  Serial.print(' ');
+  // Lanes E and F are masked - 000011
+  Serial.print("000000");
+  Serial.print(' ');
+  // Lanes are not reversed  - 0
+  Serial.print(0);
+  // Not in eliminator mode - 0
+  Serial.print(0);
+  // Old data format - 0
+  Serial.println(1);
+}
+
+void reportResults() {
+  Serial.print("Winner: ");
+  Serial.println(winner);
+
+  // N1 - New format 
+  // Converts the race time data to the new timer format:
+  // A=3.001!  B=3.002”  C=3.003#   D=3.004$  E=3.005%  F=3.006&   <CR>  <LF> 
+  Serial.print("A=");
+  Serial.print(elapsedTimeSecs(elapsedL1Time));
+  if (winner == 1 || winner == 0 || winner == 3) {
+    Serial.print('!');
+  } else {
+    Serial.print('"');
+  }
+  Serial.print(" ");
+
+  Serial.print("B=");
+  Serial.print(elapsedTimeSecs(elapsedL2Time));
+  if (winner == 2 || winner == 0 || winner == 3) {
+    Serial.print('!');
+  } else {
+    Serial.print('"');
+  }
+  Serial.print(" ");
+
+  Serial.print("C=");
+  Serial.print(elapsedTimeSecs(0));
+  Serial.print('#');
+  Serial.print(" ");
+
+  Serial.print("D=");
+  Serial.print(elapsedTimeSecs(0));
+  Serial.print('$');
+  Serial.print(" ");
+
+  Serial.print("E=");
+  Serial.print(elapsedTimeSecs(0));
+  Serial.print('%');
+  Serial.print(" ");
+
+  Serial.print("F=");
+  Serial.print(elapsedTimeSecs(0));
+  Serial.print('&');
+  Serial.println();
 }

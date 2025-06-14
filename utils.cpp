@@ -1,14 +1,5 @@
 #include "Arduino.h"
 
-void printTitle() {
-  Serial.println("###########################################################");
-  Serial.println("## Pinewoood Derby - Race Tracker - v0.1.0               ##");
-  Serial.println("## Author: Steven West <redwolf3@steven-west.com>        ##");
-  Serial.println("## Last Modified: 03/17/2024                             ##");
-  Serial.println("###########################################################");
-  Serial.println();
-}
-
 char *uptime(uint32_t millis) {
   static char _return[32];
   uint32_t secs=millis/1000, mins=secs/60;
